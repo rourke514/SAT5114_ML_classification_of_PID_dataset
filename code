@@ -1,0 +1,158 @@
+from sklearn.feature_selection import SelectKBest, f_classif, chi2
+from sklearn.pipeline import Pipeline
+from sklearn.linear_model import LogisticRegression
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.svm import SVC
+from sklearn.neural_network import MLPClassifier
+from sklearn.model_selection import GridSearchCV, train_test_split
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+from sklearn.preprocessing import StandardScaler
+from sklearn.impute import SimpleImputer
+import pandas as pd
+
+# Load the dataset into a Pandas dataframe
+df = pd.read_csv('https://raw.githubusercontent.com/jbrownlee/Datasets/master/pima-indians-diabetes.data.csv', header=None)
+
+# Set column names for the dataframe
+df.columns = ['Pregnancies', 'Glucose', 'BloodPressure', 'SkinThickness', 'Insulin', 'BMI', 'DiabetesPedigreeFunction', 'Age', 'Outcome']
+
+# Print the first 5 rows of the dataframe, the shape of the dataframe, the number of missing values in each column
+print(df.head())
+print(df.shape)
+print(df.isnull().sum())
+print(df['Outcome'].value_counts())
+
+# Split the dataset into features (X) and target variable (y)
+X = df.drop('Outcome', axis=1)
+y = df['Outcome']
+
+# Split the dataset into training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Scale the features to have a mean of 0 and standard deviation of 1
+scaler = StandardScaler()
+X_train_ = scaler.fit_transform(X_train)
+X_test_ = scaler.transform(X_test)
+
+model_choice = int(input('Enter 1: for Logistic Regression\nEnter 2: for KNN\nEnter 3: for SVM\nEnter 4: for MLP: '))
+if model_choice == 1:
+    pipe = Pipeline([
+    ('imputer', SimpleImputer(strategy='median')),
+    ('scaler', StandardScaler()),
+    ('feature_selection', SelectKBest(f_classif, k=5)),
+    ('logreg', LogisticRegression())
+    ])
+
+    # Define a parameter grid to search over
+    param_grid = {
+    'feature_selection__k': [5, 6, 7, 8],
+    'logreg__C': [0.001, 0.01, 0.1, 1, 10, 100, 1000]
+    }
+
+    # Perform grid search over the parameter grid
+    grid_search = GridSearchCV(pipe, param_grid, cv=5)
+    grid_search.fit(X_train_, y_train)
+
+    # Print the best hyperparameters found by grid search
+    print('Best hyperparameters:', grid_search.best_params_)
+
+    # Evaluate the performance of the model on the testing set using the best hyperparameters
+    y_pred = grid_search.predict(X_test_)
+    print('Accuracy:', accuracy_score(y_test, y_pred))
+    print('Precision:', precision_score(y_test, y_pred))
+    print('Recall:', recall_score(y_test, y_pred))
+    print('F1 score:', f1_score(y_test, y_pred))
+
+elif model_choice == 2:
+    # Define a KNN model
+    model = KNeighborsClassifier()
+
+    # Define a parameter grid to search over
+    param_grid = {'n_neighbors': [1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21]}
+
+    # Perform grid search over the parameter grid
+    grid_search = GridSearchCV(model, param_grid, cv=5)
+    grid_search.fit(X_train_, y_train)
+
+    # Print the best hyperparameters found by grid search
+    print('Best hyperparameters:', grid_search.best_params_)
+
+    # Evaluate the performance of the model on the testing set using the best hyperparameters
+    y_pred = grid_search.predict(X_test)
+    print('Accuracy:', accuracy_score(y_test, y_pred))
+    print('Precision:', precision_score(y_test, y_pred))
+    print('Recall:', recall_score(y_test, y_pred))
+    print('F1 score:', f1_score(y_test, y_pred))
+
+elif model_choice == 3:
+    # Define a SelectKBest feature selector to select the top 5 features using the chi2 scoring function
+    selector = SelectKBest(chi2, k=5)
+    # # Define a SVM model
+    model = SVC()
+
+   # Define a parameter grid to search over
+    param_grid = {
+        'C': [1, 10],
+        'gamma': [0.01],
+        'kernel': ['linear']
+    }
+    # Perform grid search over the parameter grid
+    grid_search = GridSearchCV(model, param_grid, cv=5)
+    grid_search.fit(X_train, y_train)
+
+    # Print the best hyperparameters found by grid search
+    print('Best hyperparameters:', grid_search.best_params_)
+
+    # Fit the selector and scaler on the training data
+    X_train = selector.fit_transform(X_train, y_train)
+    X_train = scaler.fit_transform(X_train)
+
+    # Transform the testing data using the selector and scaler
+    X_test = selector.transform(X_test)
+    X_test = scaler.transform(X_test)
+
+    # Train the SVC model on the selected and scaled features
+    model = grid_search.best_estimator_
+    model.fit(X_train, y_train)
+
+    # Make predictions on the testing set using the trained SVC model
+    y_pred = model.predict(X_test)
+    print('Accuracy:', accuracy_score(y_test, y_pred))
+    print('Precision:', precision_score(y_test, y_pred))
+    print('Recall:', recall_score(y_test, y_pred))
+    print('F1 score:', f1_score(y_test, y_pred))
+
+elif model_choice == 4:
+    # Define a pipeline that includes feature selection and MLP
+    model = MLPClassifier()
+    pipe = Pipeline([
+        ('imputer', SimpleImputer(strategy='median')),
+        ('scaler', StandardScaler()),
+        ('select', SelectKBest(f_classif)),
+        ('mlp', model)
+    ])
+
+    # Define a parameter grid to search over
+    param_grid = {
+        'select__k': [5, 6, 7, 8],
+        'mlp__hidden_layer_sizes': [(8,), (16,), (32,)],
+        'mlp__activation': ['relu', 'tanh', 'logistic'],
+        'mlp__solver': ['adam', 'sgd', 'lbfgs'],
+        'mlp__max_iter': [100, 200, 500]
+    }
+
+    # Perform grid search over the parameter grid
+    grid_search = GridSearchCV(pipe, param_grid, cv=5)
+    grid_search.fit(X_train_, y_train)
+
+    # Print the best hyperparameters found by grid search
+    print('Best hyperparameters:', grid_search.best_params_)
+
+    # Make predictions on the testing set using the best MLP model found by grid search
+    y_pred = grid_search.predict(X_test_)
+
+    # Calculate the performance metrics of the best MLP model
+    print('Accuracy:', accuracy_score(y_test, y_pred))
+    print('Precision:', precision_score(y_test, y_pred))
+    print('Recall:', recall_score(y_test, y_pred))
+    print('F1 score:', f1_score(y_test, y_pred))
